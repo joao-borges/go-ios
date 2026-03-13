@@ -61,11 +61,7 @@ func (muxConn *UsbMuxConnection) savePair(udid string, DeviceCertificate []byte,
 	SystemBUID string,
 ) (bool, error) {
 	bytes := newSavePairRecordData(DeviceCertificate, HostPrivateKey, HostCertificate, RootPrivateKey, RootCertificate, EscrowBag, WiFiMACAddress, HostID, SystemBUID)
-	err := muxConn.Send(newSavePair(udid, bytes))
-	if err != nil {
-		return false, err
-	}
-	resp, err := muxConn.ReadMessage()
+	resp, err := muxConn.SendAndRead(newSavePair(udid, bytes))
 	if err != nil {
 		return false, err
 	}

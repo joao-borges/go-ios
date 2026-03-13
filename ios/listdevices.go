@@ -94,11 +94,7 @@ func (device *DeviceEntry) SupportsRsd() bool {
 // ListDevices returns a DeviceList containing data about all
 // currently connected iOS devices
 func (muxConn *UsbMuxConnection) ListDevices() (DeviceList, error) {
-	err := muxConn.Send(NewReadDevices())
-	if err != nil {
-		return DeviceList{}, fmt.Errorf("Failed sending to usbmux requesting devicelist: %v", err)
-	}
-	response, err := muxConn.ReadMessage()
+	response, err := muxConn.SendAndRead(NewReadDevices())
 	if err != nil {
 		return DeviceList{}, fmt.Errorf("Failed getting devicelist: %v", err)
 	}

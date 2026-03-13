@@ -132,9 +132,28 @@ func (muxConn *UsbMuxConnection) SendMuxMessage(msg UsbMuxMessage) error {
 }
 
 // ReadMessage blocks until the next muxMessage is available on the underlying DeviceConnection and returns it.
-// A read deadline is set on the underlying connection to prevent indefinite hangs when
-// usbmuxd's single-threaded event loop is stalled (e.g., by connection teardown flushes).
+// This method has no timeout and will block indefinitely — use it for long-lived Listen connections
+// that wait for device attach/detach events.
 func (muxConn *UsbMuxConnection) ReadMessage() (UsbMuxMessage, error) {
+	if muxConn.deviceConn == nil {
+		return UsbMuxMessage{}, io.EOF
+	}
+	reader := muxConn.deviceConn.Reader()
+	msg, err := muxConn.decode(reader)
+	if err != nil {
+		return UsbMuxMessage{}, err
+	}
+	return msg, nil
+}
+
+// SendAndRead sends a request and reads the response with a timeout.
+// Use this for request-response patterns where usbmuxd should reply promptly.
+// For long-lived connections (e.g., Listen), use Send + ReadMessage separately.
+func (muxConn *UsbMuxConnection) SendAndRead(msg interface{}) (UsbMuxMessage, error) {
+	err := muxConn.Send(msg)
+	if err != nil {
+		return UsbMuxMessage{}, err
+	}
 	if muxConn.deviceConn == nil {
 		return UsbMuxMessage{}, io.EOF
 	}
@@ -144,11 +163,11 @@ func (muxConn *UsbMuxConnection) ReadMessage() (UsbMuxMessage, error) {
 		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	}
 	reader := muxConn.deviceConn.Reader()
-	msg, err := muxConn.decode(reader)
+	resp, err := muxConn.decode(reader)
 	if err != nil {
 		return UsbMuxMessage{}, err
 	}
-	return msg, nil
+	return resp, nil
 }
 
 // encode serializes a MuxMessage struct to a Plist and writes it to the io.Writer.

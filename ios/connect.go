@@ -42,8 +42,7 @@ func newConnectMessage(deviceID int, portNumber uint16) connectMessage {
 // It returns an error containing the UsbMux error code should the connect fail.
 func (muxConn *UsbMuxConnection) Connect(deviceID int, port uint16) error {
 	msg := newConnectMessage(deviceID, Ntohs(port))
-	muxConn.Send(msg)
-	resp, err := muxConn.ReadMessage()
+	resp, err := muxConn.SendAndRead(msg)
 	if err != nil {
 		return err
 	}
@@ -71,11 +70,7 @@ var serviceConfigurations = map[string]bool{
 // It returns a new LockDownConnection.
 func (muxConn *UsbMuxConnection) ConnectLockdown(deviceID int) (*LockDownConnection, error) {
 	msg := newConnectMessage(deviceID, Lockdownport)
-	err := muxConn.Send(msg)
-	if err != nil {
-		return &LockDownConnection{}, err
-	}
-	resp, err := muxConn.ReadMessage()
+	resp, err := muxConn.SendAndRead(msg)
 	if err != nil {
 		return &LockDownConnection{}, err
 	}

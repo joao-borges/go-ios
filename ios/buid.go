@@ -39,11 +39,7 @@ func readBuidResponsefromBytes(plistBytes []byte) readBuidResponse {
 // ReadBuid requests the BUID of the host
 // It returns the deserialized BUID as a string.
 func (muxConn *UsbMuxConnection) ReadBuid() (string, error) {
-	err := muxConn.Send(newReadBuid())
-	if err != nil {
-		return "", err
-	}
-	resp, err := muxConn.ReadMessage()
+	resp, err := muxConn.SendAndRead(newReadBuid())
 	if err != nil {
 		return "", err
 	}

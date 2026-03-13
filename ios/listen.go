@@ -64,11 +64,7 @@ func NewListen() ListenType {
 // messages whenever devices are connected or disconnected
 func (muxConn *UsbMuxConnection) Listen() (func() (AttachedMessage, error), error) {
 	msg := NewListen()
-	err := muxConn.Send(msg)
-	if err != nil {
-		return nil, err
-	}
-	response, err := muxConn.ReadMessage()
+	response, err := muxConn.SendAndRead(msg)
 	if err != nil {
 		return nil, err
 	}

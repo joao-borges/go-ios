@@ -82,8 +82,7 @@ func PairRecordfromBytes(plistBytes []byte) PairRecord {
 // ReadPair reads the PairRecord from the usbmux socket for the given udid.
 // It returns the deserialized PairRecord.
 func (muxConn *UsbMuxConnection) ReadPair(udid string) (PairRecord, error) {
-	muxConn.Send(newReadPair(udid))
-	resp, err := muxConn.ReadMessage()
+	resp, err := muxConn.SendAndRead(newReadPair(udid))
 	if err != nil {
 		return PairRecord{}, fmt.Errorf("Error reading PairRecord: %v", err)
 	}
