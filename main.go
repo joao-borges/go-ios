@@ -506,7 +506,7 @@ The commands work as following:
 				device.UserspaceTUNPort = info.UserspaceTUNPort
 				device.UserspaceTUNHost = userspaceTunnelHost
 				device.UserspaceTUN = info.UserspaceTUN
-				device = deviceWithRsdProvider(device, udid, info.Address, info.RsdPort)
+				device = deviceWithRsdProviderFromTunnel(device, udid, info)
 			} else {
 				log.WithField("udid", device.Properties.SerialNumber).Warn("failed to get tunnel info")
 			}
@@ -2802,6 +2802,26 @@ func deviceWithRsdProvider(device ios.DeviceEntry, udid string, address string, 
 	exitIfError("error getting devicelist", err)
 
 	return device1
+}
+
+// deviceWithRsdProviderFromTunnel uses cached RSD services from the tunnel agent when available,
+// avoiding a redundant RSD connection to the device. Falls back to a direct RSD connection if
+// the cache is empty.
+func deviceWithRsdProviderFromTunnel(device ios.DeviceEntry, udid string, info tunnel.Tunnel) ios.DeviceEntry {
+	if len(info.Services) > 0 {
+		rsdProvider := ios.RsdHandshakeResponse{
+			Udid:     udid,
+			Services: info.Services,
+		}
+		device1, err := ios.GetDeviceWithAddress(udid, info.Address, rsdProvider)
+		exitIfError("error getting devicelist", err)
+		device1.UserspaceTUN = device.UserspaceTUN
+		device1.UserspaceTUNHost = device.UserspaceTUNHost
+		device1.UserspaceTUNPort = device.UserspaceTUNPort
+		return device1
+	}
+	// Fall back to direct RSD connection if services aren't cached
+	return deviceWithRsdProvider(device, udid, info.Address, info.RsdPort)
 }
 
 func readPair(device ios.DeviceEntry) {

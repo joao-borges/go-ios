@@ -37,12 +37,37 @@ type Tunnel struct {
 	// Userspace TUN device is used, connect to the local tcp port at Default
 	UserspaceTUN     bool `json:"userspaceTun"`
 	UserspaceTUNPort int  `json:"userspaceTunPort"`
-	closer           func() error
+	// Services caches the RSD service map so CLI commands don't need to reconnect to RSD
+	Services map[string]ios.RsdServiceEntry `json:"services,omitempty"`
+	closer   func() error
 }
 
 // Close closes the connection to the device and removes the virtual network interface from the host
 func (t Tunnel) Close() error {
 	return t.closer()
+}
+
+// cacheRsdServices performs an RSD handshake and stores the resulting service map in the Tunnel.
+// This allows CLI commands to reuse the cached services instead of each opening a new RSD connection.
+func (t *Tunnel) cacheRsdServices(device ios.DeviceEntry) error {
+	device.UserspaceTUN = t.UserspaceTUN
+	device.UserspaceTUNPort = t.UserspaceTUNPort
+	rsdService, err := ios.NewWithAddrPortDevice(t.Address, t.RsdPort, device)
+	if err != nil {
+		return fmt.Errorf("cacheRsdServices: failed to connect to RSD: %w", err)
+	}
+	defer rsdService.Close()
+	handshake, err := rsdService.Handshake()
+	if err != nil {
+		return fmt.Errorf("cacheRsdServices: handshake failed: %w", err)
+	}
+	t.Services = handshake.Services
+	return nil
+}
+
+// GetServices returns the cached RSD services as an RsdPortProvider, or nil if not cached.
+func (t Tunnel) GetServices() map[string]ios.RsdServiceEntry {
+	return t.Services
 }
 
 // ManualPairAndConnectToTunnel tries to verify an existing pairing, and if this fails it triggers a new manual pairing process.

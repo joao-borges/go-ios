@@ -274,6 +274,9 @@ func initializeXpcConnection(h *http.HttpConnection) error {
 	return nil
 }
 
+// tunnelDialTimeout is the maximum time to wait when establishing a TCP connection through a tunnel.
+const tunnelDialTimeout = 10 * time.Second
+
 // ConnectTUNDevice creates a *net.TCPConn to the device at the given address and port.
 // If the device is a userspaceTUN device provided by go-ios agent, it will connect to this
 // automatically. Otherwise it will try a operating system level TUN device.
@@ -283,10 +286,12 @@ func ConnectTUNDevice(remoteIp string, port int, d DeviceEntry) (*net.TCPConn, e
 	}
 
 	addr, _ := net.ResolveTCPAddr("tcp4", fmt.Sprintf("%s:%d", d.UserspaceTUNHost, d.UserspaceTUNPort))
-	conn, err := net.DialTCP("tcp", nil, addr)
+	dialer := net.Dialer{Timeout: tunnelDialTimeout}
+	genConn, err := dialer.Dial("tcp", addr.String())
 	if err != nil {
 		return nil, fmt.Errorf("ConnectUserSpaceTunnel: failed to dial: %w", err)
 	}
+	conn := genConn.(*net.TCPConn)
 	err = conn.SetKeepAlive(true)
 	if err != nil {
 		return nil, fmt.Errorf("ConnectUserSpaceTunnel: failed to set keepalive: %w", err)
@@ -306,19 +311,21 @@ func ConnectTUNDevice(remoteIp string, port int, d DeviceEntry) (*net.TCPConn, e
 func connectTUN(address string, port int) (*net.TCPConn, error) {
 	addr, err := net.ResolveTCPAddr("tcp6", fmt.Sprintf("[%s]:%d", address, port))
 	if err != nil {
-		return nil, fmt.Errorf("ConnectToHttp2WithAddr: failed to resolve address: %w", err)
+		return nil, fmt.Errorf("connectTUN: failed to resolve address: %w", err)
 	}
-	conn, err := net.DialTCP("tcp", nil, addr)
+	dialer := net.Dialer{Timeout: tunnelDialTimeout}
+	genConn, err := dialer.Dial("tcp", addr.String())
 	if err != nil {
-		return nil, fmt.Errorf("ConnectToHttp2WithAddr: failed to dial: %w", err)
+		return nil, fmt.Errorf("connectTUN: failed to dial: %w", err)
 	}
+	conn := genConn.(*net.TCPConn)
 	err = conn.SetKeepAlive(true)
 	if err != nil {
-		return nil, fmt.Errorf("ConnectUserSpaceTunnel: failed to set keepalive: %w", err)
+		return nil, fmt.Errorf("connectTUN: failed to set keepalive: %w", err)
 	}
 	err = conn.SetKeepAlivePeriod(1 * time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("ConnectUserSpaceTunnel: failed to set keepalive period: %w", err)
+		return nil, fmt.Errorf("connectTUN: failed to set keepalive period: %w", err)
 	}
 
 	return conn, nil

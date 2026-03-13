@@ -40,7 +40,7 @@ func DeviceMiddleware() gin.HandlerFunc {
 			device.UserspaceTUNPort = info.UserspaceTUNPort
 			device.UserspaceTUN = info.UserspaceTUN
 
-			device, err = deviceWithRsdProvider(device, udid, info.Address, info.RsdPort)
+			device, err = deviceWithRsdProviderFromTunnel(device, udid, info)
 			if err != nil {
 				c.Error(err)
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()}) // Return an error response
@@ -76,6 +76,24 @@ func deviceWithRsdProvider(device ios.DeviceEntry, udid string, address string, 
 	device1.UserspaceTUNPort = device.UserspaceTUNPort
 
 	return device1, nil
+}
+
+// deviceWithRsdProviderFromTunnel uses cached RSD services from the tunnel agent when available.
+func deviceWithRsdProviderFromTunnel(device ios.DeviceEntry, udid string, info tunnel.Tunnel) (ios.DeviceEntry, error) {
+	if len(info.Services) > 0 {
+		rsdProvider := ios.RsdHandshakeResponse{
+			Udid:     udid,
+			Services: info.Services,
+		}
+		device1, err := ios.GetDeviceWithAddress(udid, info.Address, rsdProvider)
+		if err != nil {
+			return device, err
+		}
+		device1.UserspaceTUN = device.UserspaceTUN
+		device1.UserspaceTUNPort = device.UserspaceTUNPort
+		return device1, nil
+	}
+	return deviceWithRsdProvider(device, udid, info.Address, info.RsdPort)
 }
 
 const IOS_KEY = "go_ios_device"

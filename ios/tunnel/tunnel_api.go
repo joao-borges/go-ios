@@ -347,6 +347,15 @@ func (m *TunnelManager) startTunnel(ctx context.Context, device ios.DeviceEntry)
 	if err != nil {
 		return Tunnel{}, err
 	}
+
+	// Cache the RSD service map so CLI commands don't each need to open their own RSD connection.
+	// This eliminates concurrent RSD connection contention on the device.
+	if err := t.cacheRsdServices(device); err != nil {
+		log.WithField("udid", device.Properties.SerialNumber).
+			WithError(err).
+			Warn("failed to cache RSD services, clients will fall back to direct RSD connections")
+	}
+
 	return t, nil
 }
 

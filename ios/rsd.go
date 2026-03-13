@@ -6,10 +6,16 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 
 	"github.com/danielpaulus/go-ios/ios/http"
 	"github.com/danielpaulus/go-ios/ios/xpc"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	rsdMaxRetries    = 3
+	rsdRetryBaseWait = 500 * time.Millisecond
 )
 
 // RsdPortProvider is an interface to get a port for a service, or a service for a port from the Remote Service Discovery on the device.
@@ -176,12 +182,31 @@ func NewWithAddrDevice(addr string, d DeviceEntry) (RsdService, error) {
 }
 
 // NewWithAddrPortDevice creates a new RsdService with the given address and port using a HTTP2 based XPC connection.
+// It retries transient connection failures with exponential backoff since the device's RSD service
+// may reject connections under concurrent load.
 func NewWithAddrPortDevice(addr string, port int, d DeviceEntry) (RsdService, error) {
-	conn, err := ConnectTUNDevice(addr, port, d)
-	if err != nil {
-		return RsdService{}, fmt.Errorf("NewWithAddrPortTUNDevice: failed to connect to device: %w", err)
+	var lastErr error
+	for attempt := range rsdMaxRetries {
+		if attempt > 0 {
+			wait := rsdRetryBaseWait * time.Duration(1<<(attempt-1))
+			log.WithField("attempt", attempt+1).WithField("wait", wait).
+				Debug("retrying RSD connection")
+			time.Sleep(wait)
+		}
+		conn, err := ConnectTUNDevice(addr, port, d)
+		if err != nil {
+			lastErr = fmt.Errorf("NewWithAddrPortDevice: failed to connect to device: %w", err)
+			continue
+		}
+		svc, err := newRsdServiceFromTcpConn(conn)
+		if err != nil {
+			conn.Close()
+			lastErr = err
+			continue
+		}
+		return svc, nil
 	}
-	return newRsdServiceFromTcpConn(conn)
+	return RsdService{}, fmt.Errorf("NewWithAddrPortDevice: all %d attempts failed, last error: %w", rsdMaxRetries, lastErr)
 }
 
 func newRsdServiceFromTcpConn(conn *net.TCPConn) (RsdService, error) {

@@ -4,11 +4,17 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"sync/atomic"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/http2"
 )
+
+// http2HandshakeTimeout is the maximum time to wait for the device to respond
+// during the HTTP/2 handshake (SETTINGS frame exchange).
+const http2HandshakeTimeout = 10 * time.Second
 
 type StreamId uint32
 
@@ -34,6 +40,18 @@ func (r *HttpConnection) Close() error {
 
 func NewHttpConnection(rw io.ReadWriteCloser) (*HttpConnection, error) {
 	framer := http2.NewFramer(rw, rw)
+
+	// Set a deadline for the HTTP/2 handshake so we fail fast instead of hanging
+	// for ~1 minute on the OS TCP timeout when the device rejects the connection.
+	if conn, ok := rw.(net.Conn); ok {
+		if err := conn.SetDeadline(time.Now().Add(http2HandshakeTimeout)); err != nil {
+			log.WithError(err).Debug("could not set handshake deadline")
+		}
+		defer func() {
+			// Clear the deadline after the handshake so subsequent I/O isn't affected
+			_ = conn.SetDeadline(time.Time{})
+		}()
+	}
 
 	_, err := rw.Write([]byte("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"))
 	if err != nil {
