@@ -8,9 +8,14 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
+
+// usbmuxReadTimeout is the maximum time to wait for a usbmuxd response.
+// This prevents indefinite hangs when usbmuxd's event loop is stalled.
+const usbmuxReadTimeout = 30 * time.Second
 
 func GetSocketTypeAndAddress(socketAddress string) (string, string) {
 	chunks := strings.Split(socketAddress, "://")
@@ -127,9 +132,16 @@ func (muxConn *UsbMuxConnection) SendMuxMessage(msg UsbMuxMessage) error {
 }
 
 // ReadMessage blocks until the next muxMessage is available on the underlying DeviceConnection and returns it.
+// A read deadline is set on the underlying connection to prevent indefinite hangs when
+// usbmuxd's single-threaded event loop is stalled (e.g., by connection teardown flushes).
 func (muxConn *UsbMuxConnection) ReadMessage() (UsbMuxMessage, error) {
 	if muxConn.deviceConn == nil {
 		return UsbMuxMessage{}, io.EOF
+	}
+	conn := muxConn.deviceConn.Conn()
+	if conn != nil {
+		_ = conn.SetReadDeadline(time.Now().Add(usbmuxReadTimeout))
+		defer func() { _ = conn.SetReadDeadline(time.Time{}) }()
 	}
 	reader := muxConn.deviceConn.Reader()
 	msg, err := muxConn.decode(reader)
