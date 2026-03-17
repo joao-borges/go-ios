@@ -131,17 +131,13 @@ func NewDeviceConnectionWithConn(conn net.Conn) *DeviceConnection {
 	return &DeviceConnection{c: conn}
 }
 
-// usbmuxdDialTimeout is the maximum time to wait for a connection to usbmuxd.
-const usbmuxdDialTimeout = 5 * time.Second
-
 // ConnectToSocketAddress connects to the USB multiplexer with a specified socket addres
 func (conn *DeviceConnection) connectToSocketAddress(socketAddress string) error {
 	if strings.HasPrefix(socketAddress, "/var") {
 		socketAddress = "unix://" + socketAddress
 	}
 	network, address := GetSocketTypeAndAddress(socketAddress)
-	dialer := net.Dialer{Timeout: usbmuxdDialTimeout}
-	c, err := dialer.Dial(network, address)
+	c, err := net.Dial(network, address)
 	if err != nil {
 		return err
 	}
